@@ -2480,7 +2480,7 @@ static void gfx_s2dex_bg_1cyc(uObjBg* bg) {
                              bg->b.imageY << 3, dsdxRect, 1 << 10, false);
 }
 
-static inline void* seg_addr(uintptr_t w1) {
+static inline void* seg_addr(uintptr_t w1, bool isGfx = false) {
     // Segmented?
     if (w1 & 1) {
         uint32_t segNum = (w1 >> 24);
@@ -2488,6 +2488,11 @@ static inline void* seg_addr(uintptr_t w1) {
         uint32_t offset = w1 & 0x00FFFFFE;
 
         if (gSegmentPointers[segNum] != 0) {
+            // Adjust offset for Gfx lookups to match the size of Gfx on 64bit machines
+            if (isGfx && offset != 0) {
+                offset *= sizeof(Gfx) / (2 * sizeof(uint32_t));
+            }
+
             return (void*)(gSegmentPointers[segNum] + offset);
         } else {
             return (void*)w1;
@@ -2757,7 +2762,7 @@ static void gfx_step(GfxExecStack& exec_stack) {
             gfx_sp_modify_vertex(C0(1, 15), C0(16, 8), cmd->words.w1);
             break;
         case G_DL: {
-            Gfx* subGFX = (Gfx*)seg_addr(cmd->words.w1);
+            Gfx* subGFX = (Gfx*)seg_addr(cmd->words.w1, true);
             if (C0(16, 1) == 0) {
                 // Push return address
                 if (subGFX != nullptr) {
@@ -2793,7 +2798,7 @@ static void gfx_step(GfxExecStack& exec_stack) {
                 }
             } else {
                 assert(0 && "????");
-                cmd = (Gfx*)seg_addr(cmd->words.w1);
+                cmd = (Gfx*)seg_addr(cmd->words.w1, true);
             }
             return;
         case G_PUSHCD:
