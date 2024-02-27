@@ -2480,7 +2480,7 @@ static void gfx_s2dex_bg_1cyc(uObjBg* bg) {
                              bg->b.imageY << 3, dsdxRect, 1 << 10, false);
 }
 
-static inline void* seg_addr(uintptr_t w1) {
+static inline void* seg_addr(uintptr_t w1, bool adjustOffsetForGfx = false) {
     // Segmented?
     if (w1 & 1) {
         uint32_t segNum = (w1 >> 24);
@@ -2488,6 +2488,11 @@ static inline void* seg_addr(uintptr_t w1) {
         uint32_t offset = w1 & 0x00FFFFFE;
 
         if (gSegmentPointers[segNum] != 0) {
+            // Adjust offset for Gfx lookups to match the size of Gfx on 64bit machines
+            if (adjustOffsetForGfx && offset != 0) {
+                offset *= sizeof(Gfx) / (2 * sizeof(uint32_t));
+            }
+
             return (void*)(gSegmentPointers[segNum] + offset);
         } else {
             return (void*)w1;
@@ -2758,6 +2763,20 @@ static void gfx_step(GfxExecStack& exec_stack) {
             break;
         case G_DL: {
             Gfx* subGFX = (Gfx*)seg_addr(cmd->words.w1);
+            if (C0(16, 1) == 0) {
+                // Push return address
+                if (subGFX != nullptr) {
+                    cmd++;
+                    exec_stack.call(cmd0, subGFX);
+                }
+            } else {
+                cmd = subGFX;
+                exec_stack.branch(cmd0);
+            }
+            return; // shortcut cmd increment
+        }
+        case G_DL_SEGMENT: {
+            Gfx* subGFX = (Gfx*)seg_addr(cmd->words.w1, true);
             if (C0(16, 1) == 0) {
                 // Push return address
                 if (subGFX != nullptr) {
